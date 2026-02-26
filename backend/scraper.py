@@ -3,8 +3,9 @@ Web scraper for cannabis products from shop.revcanna.com
 Extracts product data including terpene profiles.
 """
 
-import requests
+from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
 from bs4 import BeautifulSoup
+import requests
 import json
 import os
 import time
@@ -14,6 +15,8 @@ from urllib.parse import urljoin
 BASE_URL = "https://shop.revcanna.com"
 MENU_URL = f"{BASE_URL}/abingdon"
 DATA_FILE = os.path.join(os.path.dirname(__file__), "data", "products.json")
+LAB_API_URL = f"{BASE_URL}/_api/Products/GetExtendedLabdata"
+STORE_ID = "235"
 
 # Common terpenes to track
 TERPENES = [
@@ -23,32 +26,72 @@ TERPENES = [
     "valencene", "geraniol", "eucalyptol", "borneol", "fenchol"
 ]
 
-HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-    "Accept-Language": "en-US,en;q=0.5",
-}
+def get_browser(playwright):
+    """Launch a headless Chromium browser instance."""
+    browser = playwright.chromium.launch(headless=True)
+    return browser
 
 
-def get_session():
-    """Create a requests session with proper headers."""
-    session = requests.Session()
-    session.headers.update(HEADERS)
-    return session
-
-
-def fetch_page(session, url, retries=3):
-    """Fetch a page with retry logic."""
+def fetch_page(browser, url, retries=3, wait_until='load'):
+    """Fetch a fully-rendered page using Playwright with retry logic."""
     for attempt in range(retries):
+        page = browser.new_page()
         try:
-            response = session.get(url, timeout=30)
-            response.raise_for_status()
-            return response.text
-        except requests.RequestException as e:
+            page.goto(url, wait_until=wait_until, timeout=30000)
+            return page.content()
+        except PlaywrightTimeoutError:
+            # networkidle times out on pages with persistent background requests.
+            # Return whatever content has rendered rather than failing.
+            if wait_until == 'networkidle':
+                try:
+                    content = page.content()
+                    if content:
+                        return content
+                except Exception:
+                    pass
+            if attempt < retries - 1:
+                time.sleep(2 ** attempt)
+            else:
+                print(f"Timeout fetching {url}")
+                return None
+        except Exception as e:
             if attempt < retries - 1:
                 time.sleep(2 ** attempt)
             else:
                 print(f"Failed to fetch {url}: {e}")
+                return None
+        finally:
+            page.close()
+    return None
+
+
+def extract_variant_id(url):
+    """Extract the numeric variant ID from a product URL."""
+    match = re.search(r'-(\d+)(?:\?|$)', url)
+    return int(match.group(1)) if match else None
+
+
+def fetch_lab_data(variant_id, retries=3):
+    """Fetch full lab data (terpenes, cannabinoids) for a variant via the SweedPOS API."""
+    for attempt in range(retries):
+        try:
+            response = requests.post(
+                LAB_API_URL,
+                headers={
+                    'storeid': STORE_ID,
+                    'content-type': 'application/json',
+                    'ssr': 'false',
+                },
+                json={'variantId': variant_id},
+                timeout=15,
+            )
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            if attempt < retries - 1:
+                time.sleep(2 ** attempt)
+            else:
+                print(f"Failed to fetch lab data for variant {variant_id}: {e}")
                 return None
     return None
 
@@ -66,9 +109,9 @@ def extract_terpene_value(text):
     return 0.0
 
 
-def parse_product_page(session, product_url, basic_info):
+def parse_product_page(browser, product_url, basic_info):
     """Parse a product detail page for terpene data."""
-    html = fetch_page(session, product_url)
+    html = fetch_page(browser, product_url)
     if not html:
         return None
 
@@ -173,9 +216,9 @@ def parse_product_page(session, product_url, basic_info):
     return product
 
 
-def get_product_links(session):
+def get_product_links(browser):
     """Get all product links from the menu page."""
-    html = fetch_page(session, MENU_URL)
+    html = fetch_page(browser, MENU_URL, wait_until='networkidle')
     if not html:
         return []
 
@@ -232,9 +275,9 @@ def get_product_links(session):
     return products
 
 
-def scrape_menu_page(session):
+def scrape_menu_page(browser):
     """Scrape products directly from the menu page."""
-    html = fetch_page(session, MENU_URL)
+    html = fetch_page(browser, MENU_URL, wait_until='networkidle')
     if not html:
         return []
 
@@ -340,48 +383,74 @@ def scrape_menu_page(session):
 
 def scrape_all_products():
     """Main function to scrape all products."""
-    session = get_session()
     all_products = []
 
     print("Starting scrape of shop.revcanna.com/abingdon...")
 
-    # First try to get products from menu page
-    menu_products = scrape_menu_page(session)
-    print(f"Found {len(menu_products)} products on menu page")
+    with sync_playwright() as playwright:
+        browser = get_browser(playwright)
+        try:
+            # Get products from the fully-rendered menu page
+            menu_products = scrape_menu_page(browser)
+            print(f"Found {len(menu_products)} products on menu page")
 
-    if menu_products:
-        all_products = menu_products
+            if menu_products:
+                all_products = menu_products
 
-    # Get individual product links for detailed info
-    product_links = get_product_links(session)
-    print(f"Found {len(product_links)} product links to visit")
+            # Get product URLs (also from menu page)
+            product_links = get_product_links(browser)
+            print(f"Found {len(product_links)} product links")
 
-    # Visit each product page for detailed terpene data
-    for i, (url, basic_info) in enumerate(product_links[:50]):  # Limit to 50 products
-        print(f"Scraping product {i+1}/{min(len(product_links), 50)}: {url}")
-        product = parse_product_page(session, url, basic_info)
-        if product:
-            # Check if we already have this product from menu scrape
-            existing = next((p for p in all_products if p['url'] == url), None)
-            if existing:
-                # Update with more detailed info
-                existing.update(product)
-            else:
-                all_products.append(product)
-        time.sleep(0.5)  # Be polite to the server
+            # Visit individual product pages for any fields not on the menu
+            for i, (url, basic_info) in enumerate(product_links[:50]):
+                print(f"Scraping product {i+1}/{min(len(product_links), 50)}: {url}")
+                product = parse_product_page(browser, url, basic_info)
+                if product:
+                    existing = next((p for p in all_products if p['url'] == url), None)
+                    if existing:
+                        existing.update(product)
+                    else:
+                        all_products.append(product)
+                time.sleep(0.5)
+        finally:
+            browser.close()
 
-    # Save to file
+    # Enrich every product with full terpene data from the lab API
+    print(f"\nFetching terpene lab data for {len(all_products)} products...")
+    for i, product in enumerate(all_products):
+        url = product.get('url', '')
+        if not url:
+            continue
+        variant_id = extract_variant_id(url)
+        if not variant_id:
+            continue
+        print(f"  [{i+1}/{len(all_products)}] variant {variant_id}")
+        lab = fetch_lab_data(variant_id)
+        if lab and 'terpenes' in lab:
+            terpenes = {}
+            total = 0.0
+            for entry in lab['terpenes']['values']:
+                name = entry['name'].lower()
+                value = entry['min']
+                if name == 'total terpenes':
+                    total = value
+                else:
+                    terpenes[name] = value
+            product['terpenes'] = terpenes
+            product['total_terpenes'] = total
+        time.sleep(0.2)
+
     save_products(all_products)
-
     return all_products
 
 
 def save_products(products):
-    """Save products to JSON file."""
+    """Save products to JSON file, filtering out junk entries."""
+    valid = [p for p in products if p.get('name')]
     os.makedirs(os.path.dirname(DATA_FILE), exist_ok=True)
     with open(DATA_FILE, 'w') as f:
-        json.dump(products, f, indent=2)
-    print(f"Saved {len(products)} products to {DATA_FILE}")
+        json.dump(valid, f, indent=2)
+    print(f"Saved {len(valid)} products to {DATA_FILE} ({len(products) - len(valid)} junk entries filtered)")
 
 
 def load_products():
