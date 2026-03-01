@@ -6,10 +6,12 @@ Provides endpoints for product data with terpene information.
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from scraper import scrape_all_products, load_products, get_all_terpenes, save_products
+from db import init_db
 import os
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for React frontend
+init_db()
 
 
 @app.route('/api/products', methods=['GET'])
@@ -68,7 +70,9 @@ def get_products():
         elif sort_by == 'cbd':
             return product.get('cbd', 0)
         elif sort_by == 'price':
-            return product.get('price', 0)
+            # Use sale_price when active, otherwise regular price
+            sale = product.get('sale_price', 0)
+            return sale if sale > 0 else product.get('price', 0)
         elif sort_by == 'name':
             return product.get('name', '').lower()
         else:
