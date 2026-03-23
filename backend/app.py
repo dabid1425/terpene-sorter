@@ -3,15 +3,35 @@ Flask API server for Terpene Sorter web app.
 Provides endpoints for product data with terpene information.
 """
 
+import threading
+import time
+
 from flask import Flask, jsonify, request
 from flask_cors import CORS
-from scraper import scrape_all_products, load_products, get_all_terpenes, save_products
+from scraper import scrape_all_products, load_products, get_all_terpenes
 from db import init_db
-import os
+
+REFRESH_INTERVAL_SECONDS = 60 * 60  # 1 hour
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for React frontend
 init_db()
+
+
+def _auto_refresh_loop():
+    """Background thread: scrape all products once per hour."""
+    while True:
+        time.sleep(REFRESH_INTERVAL_SECONDS)
+        print("[auto-refresh] Starting scheduled product refresh...")
+        try:
+            products = scrape_all_products()
+            print(f"[auto-refresh] Done — {len(products)} products updated.")
+        except Exception as e:
+            print(f"[auto-refresh] Error during refresh: {e}")
+
+
+_refresh_thread = threading.Thread(target=_auto_refresh_loop, daemon=True)
+_refresh_thread.start()
 
 
 @app.route('/api/products', methods=['GET'])
@@ -134,7 +154,7 @@ def get_categories():
         if category:
             categories.add(category)
     return jsonify({
-        'categories': sorted(list(categories))
+        'categories': sorted(categories)
     })
 
 
@@ -150,7 +170,7 @@ def get_strain_types():
         if strain_type:
             strain_types.add(strain_type)
     return jsonify({
-        'strain_types': sorted(list(strain_types))
+        'strain_types': sorted(strain_types)
     })
 
 
@@ -191,8 +211,8 @@ def get_stats():
     return jsonify({
         'total_products': len(products),
         'products_with_terpenes': len(products_with_terpenes),
-        'categories': sorted(list(categories)),
-        'strain_types': sorted(list(strain_types)),
+        'categories': sorted(categories),
+        'strain_types': sorted(strain_types),
         'terpene_averages': terpene_averages
     })
 
