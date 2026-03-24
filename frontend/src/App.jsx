@@ -39,9 +39,10 @@ const styles = {
     borderRadius: '8px',
     padding: '20px',
     boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-    height: 'fit-content',
     position: 'sticky',
     top: '20px',
+    maxHeight: 'calc(100vh - 40px)',
+    overflowY: 'auto',
   },
   main: {
     minHeight: '500px',
@@ -104,15 +105,22 @@ function App() {
   const [sortBy, setSortBy] = useState('total_terpenes')
   const [sortOrder, setSortOrder] = useState('desc')
 
+  // Multi-terpene priority sort (client-side)
+  const [terpenePriority, setTerpenePriority] = useState([])
+
   // Available options
   const [availableTerpenes, setAvailableTerpenes] = useState([])
   const [categories, setCategories] = useState([])
   const [strainTypes, setStrainTypes] = useState([])
 
+  const MG_CATEGORIES = ['Edibles', 'Beverages', 'Topicals']
+  const PERCENT_CATEGORIES = ['Flower', 'Vapes', 'Concentrates', 'Pre-Rolls', 'Infused Pre-Rolls']
+
   const fetchProducts = useCallback(async () => {
     try {
       const params = new URLSearchParams()
-      params.append('sort_by', sortBy)
+      // thc_mg is a client-side-only sort — tell backend to sort by thc
+      params.append('sort_by', sortBy === 'thc_mg' ? 'thc' : sortBy)
       params.append('sort_order', sortOrder)
 
       if (selectedCategory) params.append('category', selectedCategory)
@@ -184,6 +192,26 @@ function App() {
     )
   }
 
+  const addTerpenePriority = (terpene) => {
+    if (!terpenePriority.includes(terpene)) {
+      setTerpenePriority((prev) => [...prev, terpene])
+    }
+  }
+
+  const removeTerpenePriority = (terpene) => {
+    setTerpenePriority((prev) => prev.filter((t) => t !== terpene))
+  }
+
+  const moveTerpenePriority = (index, direction) => {
+    setTerpenePriority((prev) => {
+      const next = [...prev]
+      const swapIndex = index + direction
+      if (swapIndex < 0 || swapIndex >= next.length) return next
+      ;[next[index], next[swapIndex]] = [next[swapIndex], next[index]]
+      return next
+    })
+  }
+
   const clearFilters = () => {
     setSelectedTerpenes([])
     setSelectedCategory('')
@@ -192,7 +220,34 @@ function App() {
     setMaxThc('')
     setSortBy('total_terpenes')
     setSortOrder('desc')
+    setTerpenePriority([])
   }
+
+  const sortedProducts = (() => {
+    let base = products
+
+    // Apply category filtering based on sort mode
+    if (sortBy === 'thc') {
+      base = base.filter((p) => PERCENT_CATEGORIES.includes(p.category))
+    } else if (sortBy === 'thc_mg') {
+      base = base
+        .filter((p) => MG_CATEGORIES.includes(p.category))
+        .sort((a, b) => sortOrder === 'desc' ? b.thc - a.thc : a.thc - b.thc)
+    }
+
+    if (terpenePriority.length > 0) {
+      return [...base].sort((a, b) => {
+        for (const terpene of terpenePriority) {
+          const aVal = a.terpenes?.[terpene] ?? 0
+          const bVal = b.terpenes?.[terpene] ?? 0
+          if (bVal !== aVal) return bVal - aVal
+        }
+        return 0
+      })
+    }
+
+    return base
+  })()
 
   const productsWithTerpenes = products.filter(
     (p) => p.terpenes && Object.keys(p.terpenes).length > 0
@@ -232,6 +287,10 @@ function App() {
             sortOrder={sortOrder}
             setSortOrder={setSortOrder}
             availableTerpenes={availableTerpenes}
+            terpenePriority={terpenePriority}
+            onAddTerpenePriority={addTerpenePriority}
+            onRemoveTerpenePriority={removeTerpenePriority}
+            onMoveTerpenePriority={moveTerpenePriority}
           />
 
           <TerpeneFilter
@@ -256,7 +315,7 @@ function App() {
           {loading ? (
             <div style={styles.loading}>Loading products...</div>
           ) : (
-            <ProductList products={products} />
+            <ProductList products={sortedProducts} />
           )}
         </main>
       </div>

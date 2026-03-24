@@ -125,21 +125,14 @@ const styles = {
     fontSize: '0.85rem',
     fontStyle: 'italic',
   },
-  link: {
-    display: 'block',
-    textAlign: 'center',
-    marginTop: '12px',
-    padding: '8px',
-    backgroundColor: '#2e7d32',
-    color: 'white',
-    textDecoration: 'none',
-    borderRadius: '4px',
-    fontSize: '0.9rem',
+  clickableCard: {
+    cursor: 'pointer',
   },
 }
 
 function ProductCard({ product }) {
   const [isHovered, setIsHovered] = React.useState(false)
+  const [showAllTerpenes, setShowAllTerpenes] = React.useState(false)
 
   const terpenes = product.terpenes || {}
   const sortedTerpenes = Object.entries(terpenes)
@@ -148,14 +141,40 @@ function ProductCard({ product }) {
 
   const totalTerpenes = product.total_terpenes || sortedTerpenes.reduce((sum, [_, v]) => sum + v, 0)
 
+  const isEdible = ['Edibles', 'Beverages'].includes(product.category)
+
+  // Parse pack count from weight string e.g. "20mg 10pk", "10pack", "5 pk"
+  const packCount = (() => {
+    const match = (product.weight || '').match(/(\d+)\s*p(?:k|ack)?(?:\b|$)/i)
+    return match ? parseInt(match[1]) : 1
+  })()
+
+  const formatCannabinoid = (value, label) => {
+    if (!value) return { main: '--', sub: null }
+    if (isEdible) {
+      const total = Math.round(value)
+      const perUnit = packCount > 1 ? (value / packCount).toFixed(1) : null
+      return {
+        main: `${total}mg`,
+        sub: perUnit ? `${perUnit}mg ea` : null,
+      }
+    }
+    return { main: `${value.toFixed(1)}%`, sub: null }
+  }
+
+  const thcDisplay = formatCannabinoid(product.thc, 'THC')
+  const cbdDisplay = formatCannabinoid(product.cbd, 'CBD')
+
   return (
     <div
       style={{
         ...styles.card,
         ...(isHovered ? styles.cardHover : {}),
+        ...(product.url ? styles.clickableCard : {}),
       }}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
+      onClick={() => product.url && window.open(product.url, '_blank', 'noopener,noreferrer')}
     >
       <div style={styles.imageContainer}>
         {product.image ? (
@@ -193,15 +212,17 @@ function ProductCard({ product }) {
         <div style={styles.cannabinoids}>
           <div style={styles.cannabinoid}>
             <div style={styles.cannabinoidLabel}>THC</div>
-            <div style={styles.cannabinoidValue}>
-              {product.thc ? `${product.thc.toFixed(1)}%` : '--'}
-            </div>
+            <div style={styles.cannabinoidValue}>{thcDisplay.main}</div>
+            {thcDisplay.sub && (
+              <div style={{ fontSize: '0.7rem', color: '#888' }}>{thcDisplay.sub}</div>
+            )}
           </div>
           <div style={styles.cannabinoid}>
             <div style={styles.cannabinoidLabel}>CBD</div>
-            <div style={styles.cannabinoidValue}>
-              {product.cbd ? `${product.cbd.toFixed(1)}%` : '--'}
-            </div>
+            <div style={styles.cannabinoidValue}>{cbdDisplay.main}</div>
+            {cbdDisplay.sub && (
+              <div style={{ fontSize: '0.7rem', color: '#888' }}>{cbdDisplay.sub}</div>
+            )}
           </div>
           <div style={styles.cannabinoid}>
             <div style={styles.cannabinoidLabel}>Total Terps</div>
@@ -217,14 +238,19 @@ function ProductCard({ product }) {
           </div>
           {sortedTerpenes.length > 0 ? (
             <div style={styles.terpeneList}>
-              {sortedTerpenes.slice(0, 6).map(([name, value]) => (
+              {(showAllTerpenes ? sortedTerpenes : sortedTerpenes.slice(0, 6)).map(([name, value]) => (
                 <span key={name} style={styles.terpene}>
                   <span style={styles.terpeneName}>{name}:</span>
                   <span style={styles.terpeneValue}>{value.toFixed(2)}%</span>
                 </span>
               ))}
               {sortedTerpenes.length > 6 && (
-                <span style={styles.terpene}>+{sortedTerpenes.length - 6} more</span>
+                <span
+                  style={{ ...styles.terpene, cursor: 'pointer', backgroundColor: '#c8e6c9' }}
+                  onClick={(e) => { e.stopPropagation(); setShowAllTerpenes((v) => !v) }}
+                >
+                  {showAllTerpenes ? 'Show less' : `+${sortedTerpenes.length - 6} more`}
+                </span>
               )}
             </div>
           ) : (
@@ -232,16 +258,6 @@ function ProductCard({ product }) {
           )}
         </div>
 
-        {product.url && (
-          <a
-            href={product.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={styles.link}
-          >
-            View Product
-          </a>
-        )}
       </div>
     </div>
   )

@@ -14,7 +14,15 @@ public class ProductScraper
     private const string LabApiUrl = BaseUrl + "/_api/Products/GetExtendedLabdata";
     private const string ProductListApiUrl = BaseUrl + "/_api/Products/GetProductList";
     private const string StoreId = "235";
+    private const string StoreSlug = "abingdon";
     private const int PageSize = 100;
+
+    private static string Slugify(string text)
+    {
+        var lower = text.ToLower();
+        var dashed = Regex.Replace(lower, @"[^a-z0-9]+", "-");
+        return dashed.Trim('-');
+    }
 
     private readonly HttpClient _httpClient;
     private readonly Database _db;
@@ -116,23 +124,33 @@ public class ProductScraper
 
         var catObj = item["category"];
         var category = catObj is JsonObject co ? co["name"]?.GetValue<string>() ?? "" : "";
+        var catId = catObj is JsonObject coid ? coid["id"]?.ToString() ?? "" : "";
 
         var variantIdNode = variant["id"];
         var variantId = variantIdNode != null ? variantIdNode.GetValue<int>() : 0;
 
+        var productName = item["name"]?.GetValue<string>() ?? "";
+        var variantName = variant["name"]?.GetValue<string>() ?? "";
+
+        var catSlug = !string.IsNullOrEmpty(catId) ? $"{Slugify(category)}-{catId}" : Slugify(category);
+        var prodSlug = !string.IsNullOrEmpty(variantName)
+            ? $"{Slugify(productName)}-{Slugify(variantName)}-{variantId}"
+            : $"{Slugify(productName)}-{variantId}";
+        var url = $"{BaseUrl}/{StoreSlug}/medical/menu/{catSlug}/{prodSlug}?stockType=Default";
+
         return new Product
         {
-            Name         = item["name"]?.GetValue<string>() ?? "",
+            Name         = productName,
             Brand        = brand,
             Category     = category,
             StrainType   = strainType,
             Price        = price,
             SalePrice    = salePrice,
-            Weight       = variant["name"]?.GetValue<string>() ?? "",
+            Weight       = variantName,
             Thc          = thc,
             Cbd          = cbd,
             Image        = image,
-            Url          = "",
+            Url          = url,
             VariantId    = variantId,
             Terpenes     = new Dictionary<string, double>(),
             TotalTerpenes = 0.0,

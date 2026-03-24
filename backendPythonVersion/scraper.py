@@ -16,7 +16,13 @@ BASE_URL = "https://shop.revcanna.com"
 LAB_API_URL = f"{BASE_URL}/_api/Products/GetExtendedLabdata"
 PRODUCT_LIST_API_URL = f"{BASE_URL}/_api/Products/GetProductList"
 STORE_ID = "235"
+STORE_SLUG = "abingdon"
 PAGE_SIZE = 100
+
+
+def _slugify(text):
+    """Convert text to a URL-friendly slug."""
+    return re.sub(r'-+', '-', re.sub(r'[^a-z0-9]+', '-', text.lower())).strip('-')
 
 _API_HEADERS = {
     'storeid': STORE_ID,
@@ -89,20 +95,29 @@ def parse_product_list_item(product, variant):
     brand = brand_obj.get('name', '') if isinstance(brand_obj, dict) else ''
     cat_obj = product.get('category') or {}
     category = cat_obj.get('name', '') if isinstance(cat_obj, dict) else ''
+    cat_id = cat_obj.get('id', '') if isinstance(cat_obj, dict) else ''
+
+    product_name = product.get('name', '')
+    variant_name = variant.get('name', '')
+    variant_id = variant.get('id')
+
+    cat_slug = f"{_slugify(category)}-{cat_id}" if cat_id else _slugify(category)
+    prod_slug = f"{_slugify(product_name)}-{_slugify(variant_name)}-{variant_id}" if variant_name else f"{_slugify(product_name)}-{variant_id}"
+    url = f"{BASE_URL}/{STORE_SLUG}/medical/menu/{cat_slug}/{prod_slug}?stockType=Default"
 
     return {
-        'name': product.get('name', ''),
+        'name': product_name,
         'brand': brand,
         'category': category,
         'strain_type': strain_type,
         'price': price,
         'sale_price': sale_price,
-        'weight': variant.get('name', ''),
+        'weight': variant_name,
         'thc': thc,
         'cbd': cbd,
         'image': image,
-        'url': '',
-        'variant_id': variant.get('id'),
+        'url': url,
+        'variant_id': variant_id,
         'terpenes': {},
         'total_terpenes': 0.0,
         'purchase_type': '',
