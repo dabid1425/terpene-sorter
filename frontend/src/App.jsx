@@ -228,8 +228,18 @@ function App() {
     setPurchaseType('')
   }
 
+  const isTerpeneSort =
+    terpenePriority.length > 0 ||
+    sortBy === 'total_terpenes' ||
+    availableTerpenes.includes(sortBy)
+
   const sortedProducts = (() => {
     let base = products
+
+    // Hide products without terpene profiles when sorting by terpenes
+    if (isTerpeneSort) {
+      base = base.filter((p) => p.terpenes && Object.keys(p.terpenes).length > 0)
+    }
 
     // Optionally show only products without terpene data
     if (hideMissingTerpenes) {
@@ -259,7 +269,7 @@ function App() {
     return base
   })()
 
-  const productsWithTerpenes = products.filter(
+  const productsWithTerpenes = sortedProducts.filter(
     (p) => p.terpenes && Object.keys(p.terpenes).length > 0
   )
 
@@ -284,7 +294,7 @@ function App() {
           </button>
 
           <div style={styles.stats}>
-            <strong>Products:</strong> {products.length}
+            <strong>Products:</strong> {sortedProducts.length}
             <br />
             <strong>With Terpenes:</strong> {productsWithTerpenes.length}
           </div>
