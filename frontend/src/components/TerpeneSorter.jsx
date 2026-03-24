@@ -153,7 +153,7 @@ function TerpeneSorter({
   const sortOptions = [
     { value: 'total_terpenes', label: 'Total Terpenes' },
     { value: 'thc', label: 'THC %' },
-    { value: 'thc_mg', label: 'THC mg (edibles/beverages)' },
+    { value: 'thc_mg', label: 'THC mg' },
     { value: 'cbd', label: 'CBD %' },
     { value: 'price', label: 'Price' },
     { value: 'name', label: 'Name' },

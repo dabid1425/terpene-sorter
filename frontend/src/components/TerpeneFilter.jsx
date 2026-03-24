@@ -89,6 +89,8 @@ function TerpeneFilter({
   maxThc,
   onMinThcChange,
   onMaxThcChange,
+  hideMissingTerpenes,
+  onHideMissingTerpenesChange,
   onClearFilters,
 }) {
   const hasActiveFilters =
@@ -96,7 +98,8 @@ function TerpeneFilter({
     selectedCategory ||
     selectedStrainType ||
     minThc ||
-    maxThc
+    maxThc ||
+    hideMissingTerpenes
 
   return (
     <div>
@@ -167,6 +170,20 @@ function TerpeneFilter({
             />
           </div>
         </div>
+      </div>
+
+      {/* Hide missing terpenes toggle */}
+      <div style={{ ...styles.section, display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <input
+          type="checkbox"
+          id="hideMissingTerpenes"
+          style={styles.checkbox}
+          checked={hideMissingTerpenes}
+          onChange={(e) => onHideMissingTerpenesChange(e.target.checked)}
+        />
+        <label htmlFor="hideMissingTerpenes" style={{ ...styles.label, cursor: 'pointer' }}>
+          Show only products without terpenes
+        </label>
       </div>
 
       {/* Terpene Filter */}

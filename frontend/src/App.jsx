@@ -100,6 +100,7 @@ function App() {
   const [selectedStrainType, setSelectedStrainType] = useState('')
   const [minThc, setMinThc] = useState('')
   const [maxThc, setMaxThc] = useState('')
+  const [hideMissingTerpenes, setHideMissingTerpenes] = useState(false)
 
   // Sort state
   const [sortBy, setSortBy] = useState('total_terpenes')
@@ -221,10 +222,16 @@ function App() {
     setSortBy('total_terpenes')
     setSortOrder('desc')
     setTerpenePriority([])
+    setHideMissingTerpenes(false)
   }
 
   const sortedProducts = (() => {
     let base = products
+
+    // Optionally show only products without terpene data
+    if (hideMissingTerpenes) {
+      base = base.filter((p) => !p.terpenes || Object.keys(p.terpenes).length === 0)
+    }
 
     // Apply category filtering based on sort mode
     if (sortBy === 'thc') {
@@ -307,6 +314,8 @@ function App() {
             maxThc={maxThc}
             onMinThcChange={setMinThc}
             onMaxThcChange={setMaxThc}
+            hideMissingTerpenes={hideMissingTerpenes}
+            onHideMissingTerpenesChange={setHideMissingTerpenes}
             onClearFilters={clearFilters}
           />
         </aside>
