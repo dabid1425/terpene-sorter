@@ -47,10 +47,15 @@ def get_products():
     - terpenes: Comma-separated list of terpenes to filter by (products must contain all)
     - min_thc: Minimum THC percentage
     - max_thc: Maximum THC percentage
+    - purchase_type: Filter by purchase type ('Recreational' or 'Medical')
     """
     products = load_products()
 
     # Apply filters
+    purchase_type = request.args.get('purchase_type')
+    if purchase_type:
+        products = [p for p in products if p.get('purchase_type', '').lower() == purchase_type.lower()]
+
     category = request.args.get('category')
     if category:
         products = [p for p in products if p.get('category', '').lower() == category.lower()]

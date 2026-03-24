@@ -50,7 +50,7 @@ def fetch_lab_data(variant_id):
     return _api_post(LAB_API_URL, {'variantId': variant_id})
 
 
-def fetch_product_list_page(page_num, page_size=PAGE_SIZE):
+def fetch_product_list_page(page_num, sale_type, page_size=PAGE_SIZE):
     """Fetch one page of products from the SweedPOS GetProductList API."""
     return _api_post(PRODUCT_LIST_API_URL, {
         'filters': {},
@@ -58,7 +58,7 @@ def fetch_product_list_page(page_num, page_size=PAGE_SIZE):
         'pageSize': page_size,
         'sortingMethodId': 7,
         'searchTerm': '',
-        'saleType': 'Recreational',
+        'saleType': sale_type,
         'platformOs': 'web',
         'sourcePage': 1,
     })
@@ -104,16 +104,45 @@ def parse_product_list_item(product, variant):
         'variant_id': variant.get('id'),
         'terpenes': {},
         'total_terpenes': 0.0,
+        'purchase_type': '',
     }
 
 
+def _edible_mg_per_unit(weight):
+    """Parse mg per unit from an edible weight string (e.g. '20mg 10pk', '10pk 100mg')."""
+    pack_first = re.match(r'(\d+)pk\s+(\d+)mg', weight)
+    if pack_first:
+        return int(pack_first.group(2)) / int(pack_first.group(1))
+    mg_first = re.match(r'(\d+)mg', weight)
+    if mg_first:
+        return int(mg_first.group(1))
+    return 0
+
+
+def _concentrate_grams(weight):
+    """Parse grams from a concentrate weight string (e.g. '2g', '3.5g')."""
+    match = re.match(r'([\d.]+)g', weight)
+    return float(match.group(1)) if match else 0
+
+
+def classify_purchase_type(product):
+    """Determine purchase type from product attributes."""
+    category = product.get('category', '')
+    weight = product.get('weight', '')
+    if category == 'Edibles' and _edible_mg_per_unit(weight) > 10:
+        return 'Medical'
+    if category == 'Concentrates' and _concentrate_grams(weight) > 1:
+        return 'Medical'
+    return 'Recreational'
+
+
 def fetch_all_products_api():
-    """Fetch all products from the SweedPOS GetProductList API (paginated)."""
-    products = []
+    """Fetch all products in a single Medical pull and classify by purchase type."""
+    products = {}
     page = 1
     while True:
         print(f"Fetching product list page {page}...")
-        data = fetch_product_list_page(page)
+        data = fetch_product_list_page(page, 'Medical')
         if not data:
             break
         items = data.get('list', [])
@@ -122,12 +151,13 @@ def fetch_all_products_api():
             for variant in item.get('variants', []):
                 product = parse_product_list_item(item, variant)
                 if product['name']:
-                    products.append(product)
+                    product['purchase_type'] = classify_purchase_type(product)
+                    products[product['variant_id']] = product
         print(f"  Got {len(items)} items (running total: {len(products)} variants)")
         if page * PAGE_SIZE >= total or not items:
             break
         page += 1
-    return products
+    return list(products.values())
 
 
 def scrape_all_products():

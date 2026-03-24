@@ -37,12 +37,17 @@ def init_db():
         url             TEXT           NOT NULL DEFAULT '',
         terpenes        JSONB          NOT NULL DEFAULT '{}',
         total_terpenes  NUMERIC(8,4)   NOT NULL DEFAULT 0,
+        purchase_type   TEXT           NOT NULL DEFAULT '',
         updated_at      TIMESTAMPTZ    NOT NULL DEFAULT NOW()
     );
     """
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(ddl)
+            cur.execute("""
+                ALTER TABLE products
+                ADD COLUMN IF NOT EXISTS purchase_type TEXT NOT NULL DEFAULT '';
+            """)
         conn.commit()
 
 
@@ -72,6 +77,7 @@ def save_products(products):
             p.get("url", ""),
             json.dumps(p.get("terpenes") or {}),
             p.get("total_terpenes", 0) or 0,
+            p.get("purchase_type", ""),
         )
         for p in valid
     ]
@@ -80,7 +86,7 @@ def save_products(products):
     INSERT INTO products (
         variant_id, name, brand, category, strain_type,
         price, sale_price, weight, thc, cbd,
-        image, url, terpenes, total_terpenes
+        image, url, terpenes, total_terpenes, purchase_type
     ) VALUES %s
     ON CONFLICT (variant_id) DO UPDATE SET
         name           = EXCLUDED.name,
@@ -96,6 +102,7 @@ def save_products(products):
         url            = EXCLUDED.url,
         terpenes       = EXCLUDED.terpenes,
         total_terpenes = EXCLUDED.total_terpenes,
+        purchase_type  = EXCLUDED.purchase_type,
         updated_at     = NOW()
     """
 
@@ -127,7 +134,8 @@ def load_products():
                         image,
                         url,
                         terpenes,
-                        CAST(total_terpenes AS FLOAT) AS total_terpenes
+                        CAST(total_terpenes AS FLOAT) AS total_terpenes,
+                        purchase_type
                     FROM products
                 """)
                 return [dict(row) for row in cur.fetchall()]
