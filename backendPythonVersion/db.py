@@ -114,12 +114,33 @@ def save_products(products):
     print(f"Upserted {len(valid)} products into PostgreSQL ({len(products) - len(valid)} skipped)")
 
 
-def load_products():
-    """Return all products from the database as a list of plain dicts."""
+def load_products(filters=None):
+    """Return products from the database as a list of plain dicts.
+
+    Optional filters dict supports: purchase_type, category, strain_type,
+    min_thc, max_thc. All string comparisons are case-insensitive.
+    """
+    where_clauses = []
+    params = []
+
+    if filters:
+        for field in ('purchase_type', 'category', 'strain_type'):
+            if filters.get(field):
+                where_clauses.append(f'LOWER({field}) = LOWER(%s)')
+                params.append(filters[field])
+        if filters.get('min_thc') is not None:
+            where_clauses.append('thc >= %s')
+            params.append(filters['min_thc'])
+        if filters.get('max_thc') is not None:
+            where_clauses.append('thc <= %s')
+            params.append(filters['max_thc'])
+
+    where = ('WHERE ' + ' AND '.join(where_clauses)) if where_clauses else ''
+
     try:
         with get_connection() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-                cur.execute("""
+                cur.execute(f"""
                     SELECT
                         variant_id,
                         name,
@@ -137,7 +158,8 @@ def load_products():
                         CAST(total_terpenes AS FLOAT) AS total_terpenes,
                         purchase_type
                     FROM products
-                """)
+                    {where}
+                """, params or None)
                 return [dict(row) for row in cur.fetchall()]
     except Exception as e:
         print(f"load_products error: {e}")

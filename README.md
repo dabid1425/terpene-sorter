@@ -4,14 +4,23 @@ A web app that scrapes cannabis products from shop.revcanna.com and displays the
 
 ## Quick Start
 
+### Prerequisites
+
+- PostgreSQL 17 running locally (`brew services start postgresql@17` on macOS)
+- Database created: `createdb terpene_sorter`
+
 ### 1. Backend Setup
 
-```bash
-cd backend
+Choose **one** of the two backend implementations:
 
-# Create virtual environment (optional but recommended)
-python3 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+#### Option A — Python (Flask, port 5001)
+
+```bash
+cd backendPythonVersion
+
+# Create and activate virtual environment
+python3 -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
 # Install dependencies
 pip install -r requirements.txt
@@ -20,7 +29,20 @@ pip install -r requirements.txt
 python app.py
 ```
 
-The API will be available at http://localhost:5000
+The API will be available at http://localhost:5001
+
+#### Option B — C# (ASP.NET Core, port 5002)
+
+Requires [.NET SDK](https://dotnet.microsoft.com/download) (6.0+).
+
+```bash
+cd backendCSharpVersion
+
+# Restore packages and run
+dotnet run
+```
+
+The API will be available at http://localhost:5002
 
 ### 2. Frontend Setup
 
@@ -70,12 +92,17 @@ The app will be available at http://localhost:3000
 
 ```
 terpene-sorter/
-├── backend/
-│   ├── app.py              # Flask API server
+├── backendPythonVersion/
+│   ├── app.py              # Flask API server (port 5001)
 │   ├── scraper.py          # Web scraping logic
-│   ├── requirements.txt    # Python dependencies
-│   └── data/
-│       └── products.json   # Cached product data
+│   ├── db.py               # PostgreSQL layer
+│   └── requirements.txt    # Python dependencies
+├── backendCSharpVersion/
+│   ├── Program.cs          # ASP.NET Core entry point (port 5002)
+│   ├── Controllers/        # API controllers
+│   ├── Data/               # Database layer
+│   ├── Models/             # Product models
+│   └── Scraper/            # Scraping logic
 ├── frontend/
 │   ├── src/
 │   │   ├── App.jsx

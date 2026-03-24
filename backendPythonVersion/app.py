@@ -49,38 +49,24 @@ def get_products():
     - max_thc: Maximum THC percentage
     - purchase_type: Filter by purchase type ('Recreational' or 'Medical')
     """
-    products = load_products()
+    # SQL-level filters (efficient)
+    sql_filters = {
+        'purchase_type': request.args.get('purchase_type'),
+        'category':      request.args.get('category'),
+        'strain_type':   request.args.get('strain_type'),
+        'min_thc':       request.args.get('min_thc', type=float),
+        'max_thc':       request.args.get('max_thc', type=float),
+    }
+    products = load_products(filters={k: v for k, v in sql_filters.items() if v is not None})
 
-    # Apply filters
-    purchase_type = request.args.get('purchase_type')
-    if purchase_type:
-        products = [p for p in products if p.get('purchase_type', '').lower() == purchase_type.lower()]
-
-    category = request.args.get('category')
-    if category:
-        products = [p for p in products if p.get('category', '').lower() == category.lower()]
-
-    strain_type = request.args.get('strain_type')
-    if strain_type:
-        products = [p for p in products if p.get('strain_type', '').lower() == strain_type.lower()]
-
+    # Python-level filter: terpene presence (JSONB traversal, done after DB fetch)
     terpenes_filter = request.args.get('terpenes')
     if terpenes_filter:
-        required_terpenes = [t.strip().lower() for t in terpenes_filter.split(',')]
-        filtered_products = []
-        for product in products:
-            product_terpenes = {k.lower(): v for k, v in product.get('terpenes', {}).items()}
-            if all(t in product_terpenes and product_terpenes[t] > 0 for t in required_terpenes):
-                filtered_products.append(product)
-        products = filtered_products
-
-    min_thc = request.args.get('min_thc', type=float)
-    if min_thc is not None:
-        products = [p for p in products if p.get('thc', 0) >= min_thc]
-
-    max_thc = request.args.get('max_thc', type=float)
-    if max_thc is not None:
-        products = [p for p in products if p.get('thc', 0) <= max_thc]
+        required = [t.strip().lower() for t in terpenes_filter.split(',')]
+        products = [
+            p for p in products
+            if all(p.get('terpenes', {}).get(t, 0) > 0 for t in required)
+        ]
 
     # Apply sorting
     sort_by = request.args.get('sort_by', 'total_terpenes')

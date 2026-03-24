@@ -6,6 +6,7 @@ Fetches product data (terpenes, cannabinoids, pricing) via the SweedPOS API.
 import json
 import re
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import requests
 
@@ -168,11 +169,11 @@ def scrape_all_products():
     print(f"Fetched {len(all_products)} product variants")
 
     print(f"\nFetching terpene lab data for {len(all_products)} products...")
-    for i, product in enumerate(all_products):
+
+    def enrich(product):
         variant_id = product.get('variant_id') or extract_variant_id(product.get('url', ''))
         if not variant_id:
-            continue
-        print(f"  [{i+1}/{len(all_products)}] variant {variant_id}")
+            return product
         lab = fetch_lab_data(variant_id)
         if lab and 'terpenes' in lab:
             terpenes = {}
@@ -186,7 +187,16 @@ def scrape_all_products():
                     terpenes[name] = value
             product['terpenes'] = terpenes
             product['total_terpenes'] = total
-        time.sleep(0.2)
+        return product
+
+    completed = 0
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        futures = {executor.submit(enrich, p): p for p in all_products}
+        for future in as_completed(futures):
+            future.result()
+            completed += 1
+            if completed % 50 == 0 or completed == len(all_products):
+                print(f"  {completed}/{len(all_products)} variants enriched")
 
     save_products(all_products)
     return all_products
@@ -197,9 +207,9 @@ def save_products(products):
     db_save_products(products)
 
 
-def load_products():
+def load_products(filters=None):
     """Load products from PostgreSQL."""
-    return db_load_products()
+    return db_load_products(filters=filters)
 
 
 def get_all_terpenes():
