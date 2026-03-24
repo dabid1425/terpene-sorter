@@ -1,10 +1,12 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect } from 'react'
+import Sidebar from './components/Sidebar'
 import ProductList from './components/ProductList'
-import ProductCard from './components/ProductCard'
-import TerpeneFilter from './components/TerpeneFilter'
-import TerpeneSorter from './components/TerpeneSorter'
+import { useProducts } from './hooks/useProducts'
+import { useFilters } from './hooks/useFilters'
 
-const API_BASE = '/api'
+const MG_CATEGORIES = ['Edibles', 'Beverages', 'Topicals']
+const PERCENT_CATEGORIES = ['Flower', 'Vapes', 'Concentrates', 'Pre-Rolls', 'Infused Pre-Rolls']
+const PAGE_SIZES = [25, 50, 75, 100, 150, 200, 'All']
 
 const styles = {
   app: {
@@ -34,44 +36,8 @@ const styles = {
     gridTemplateColumns: '280px 1fr',
     gap: '20px',
   },
-  sidebar: {
-    backgroundColor: 'white',
-    borderRadius: '8px',
-    padding: '20px',
-    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-    position: 'sticky',
-    top: '20px',
-    maxHeight: 'calc(100vh - 40px)',
-    overflowY: 'auto',
-  },
   main: {
     minHeight: '500px',
-  },
-  refreshButton: {
-    width: '100%',
-    padding: '12px',
-    backgroundColor: '#2e7d32',
-    color: 'white',
-    border: 'none',
-    borderRadius: '6px',
-    cursor: 'pointer',
-    fontSize: '1rem',
-    marginBottom: '20px',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: '8px',
-  },
-  refreshButtonDisabled: {
-    backgroundColor: '#ccc',
-    cursor: 'not-allowed',
-  },
-  stats: {
-    backgroundColor: '#e8f5e9',
-    padding: '15px',
-    borderRadius: '6px',
-    marginBottom: '20px',
-    fontSize: '0.9rem',
   },
   loading: {
     textAlign: 'center',
@@ -79,185 +45,57 @@ const styles = {
     fontSize: '1.2rem',
     color: '#666',
   },
-  error: {
-    backgroundColor: '#ffebee',
-    color: '#c62828',
-    padding: '15px',
-    borderRadius: '6px',
-    marginBottom: '20px',
-  },
 }
 
 function App() {
-  const [products, setProducts] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
-  const [error, setError] = useState(null)
+  const filters = useFilters()
 
-  // Filter state
-  const [selectedTerpenes, setSelectedTerpenes] = useState([])
-  const [selectedCategory, setSelectedCategory] = useState('')
-  const [selectedStrainType, setSelectedStrainType] = useState('')
-  const [minThc, setMinThc] = useState('')
-  const [maxThc, setMaxThc] = useState('')
-  const [hideMissingTerpenes, setHideMissingTerpenes] = useState(false)
-  const [purchaseType, setPurchaseType] = useState('Recreational')
+  const {
+    products, loading, refreshing, error,
+    availableTerpenes, categories, strainTypes,
+    refreshData,
+  } = useProducts({
+    sortBy: filters.sortBy,
+    sortOrder: filters.sortOrder,
+    selectedCategory: filters.selectedCategory,
+    selectedStrainType: filters.selectedStrainType,
+    selectedTerpenes: filters.selectedTerpenes,
+    minThc: filters.minThc,
+    maxThc: filters.maxThc,
+    purchaseType: filters.purchaseType,
+  })
 
-  // Sort state
-  const [sortBy, setSortBy] = useState('total_terpenes')
-  const [sortOrder, setSortOrder] = useState('desc')
-
-  // Multi-terpene priority sort (client-side)
-  const [terpenePriority, setTerpenePriority] = useState([])
-
-  // Available options
-  const [availableTerpenes, setAvailableTerpenes] = useState([])
-  const [categories, setCategories] = useState([])
-  const [strainTypes, setStrainTypes] = useState([])
-
-  const MG_CATEGORIES = ['Edibles', 'Beverages', 'Topicals']
-  const PERCENT_CATEGORIES = ['Flower', 'Vapes', 'Concentrates', 'Pre-Rolls', 'Infused Pre-Rolls']
-
-  const fetchProducts = useCallback(async () => {
-    try {
-      const params = new URLSearchParams()
-      // thc_mg is a client-side-only sort — tell backend to sort by thc
-      params.append('sort_by', sortBy === 'thc_mg' ? 'thc' : sortBy)
-      params.append('sort_order', sortOrder)
-
-      if (selectedCategory) params.append('category', selectedCategory)
-      if (selectedStrainType) params.append('strain_type', selectedStrainType)
-      if (selectedTerpenes.length > 0) params.append('terpenes', selectedTerpenes.join(','))
-      if (minThc) params.append('min_thc', minThc)
-      if (maxThc) params.append('max_thc', maxThc)
-      if (purchaseType === 'Recreational') params.append('purchase_type', 'Recreational')
-
-      const response = await fetch(`${API_BASE}/products?${params}`)
-      const data = await response.json()
-      setProducts(data.products || [])
-      setError(null)
-    } catch (err) {
-      setError('Failed to fetch products. Make sure the backend server is running.')
-      console.error('Error fetching products:', err)
-    } finally {
-      setLoading(false)
-    }
-  }, [sortBy, sortOrder, selectedCategory, selectedStrainType, selectedTerpenes, minThc, maxThc, purchaseType])
-
-  const fetchMetadata = async () => {
-    try {
-      const [terpeneRes, categoryRes, strainRes] = await Promise.all([
-        fetch(`${API_BASE}/terpenes`),
-        fetch(`${API_BASE}/categories`),
-        fetch(`${API_BASE}/strain-types`),
-      ])
-
-      const terpeneData = await terpeneRes.json()
-      const categoryData = await categoryRes.json()
-      const strainData = await strainRes.json()
-
-      setAvailableTerpenes(terpeneData.terpenes || [])
-      setCategories(categoryData.categories || [])
-      setStrainTypes(strainData.strain_types || [])
-    } catch (err) {
-      console.error('Error fetching metadata:', err)
-    }
-  }
-
-  const refreshData = async () => {
-    setRefreshing(true)
-    setError(null)
-    try {
-      const response = await fetch(`${API_BASE}/refresh`, { method: 'POST' })
-      const data = await response.json()
-      if (data.success) {
-        setProducts(data.products || [])
-        await fetchMetadata()
-      } else {
-        setError(data.error || 'Failed to refresh data')
-      }
-    } catch (err) {
-      setError('Failed to refresh data. Check console for details.')
-      console.error('Error refreshing:', err)
-    } finally {
-      setRefreshing(false)
-    }
-  }
-
-  useEffect(() => {
-    fetchProducts()
-    fetchMetadata()
-  }, [fetchProducts])
-
-  const handleTerpeneChange = (terpene) => {
-    setSelectedTerpenes((prev) =>
-      prev.includes(terpene) ? prev.filter((t) => t !== terpene) : [...prev, terpene]
-    )
-  }
-
-  const addTerpenePriority = (terpene) => {
-    if (!terpenePriority.includes(terpene)) {
-      setTerpenePriority((prev) => [...prev, terpene])
-    }
-  }
-
-  const removeTerpenePriority = (terpene) => {
-    setTerpenePriority((prev) => prev.filter((t) => t !== terpene))
-  }
-
-  const moveTerpenePriority = (index, direction) => {
-    setTerpenePriority((prev) => {
-      const next = [...prev]
-      const swapIndex = index + direction
-      if (swapIndex < 0 || swapIndex >= next.length) return next
-      ;[next[index], next[swapIndex]] = [next[swapIndex], next[index]]
-      return next
-    })
-  }
-
-  const clearFilters = () => {
-    setSelectedTerpenes([])
-    setSelectedCategory('')
-    setSelectedStrainType('')
-    setMinThc('')
-    setMaxThc('')
-    setSortBy('total_terpenes')
-    setSortOrder('desc')
-    setTerpenePriority([])
-    setHideMissingTerpenes(false)
-    setPurchaseType('')
-  }
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(25)
 
   const isTerpeneSort =
-    terpenePriority.length > 0 ||
-    sortBy === 'total_terpenes' ||
-    availableTerpenes.includes(sortBy)
+    filters.terpenePriority.length > 0 ||
+    filters.sortBy === 'total_terpenes' ||
+    availableTerpenes.includes(filters.sortBy)
 
   const sortedProducts = (() => {
     let base = products
 
-    // Hide products without terpene profiles when sorting by terpenes
     if (isTerpeneSort) {
       base = base.filter((p) => p.terpenes && Object.keys(p.terpenes).length > 0)
     }
 
-    // Optionally show only products without terpene data
-    if (hideMissingTerpenes) {
+    if (filters.hideMissingTerpenes) {
       base = base.filter((p) => !p.terpenes || Object.keys(p.terpenes).length === 0)
     }
 
-    // Apply category filtering based on sort mode
-    if (sortBy === 'thc') {
+    if (filters.sortBy === 'thc') {
       base = base.filter((p) => PERCENT_CATEGORIES.includes(p.category))
-    } else if (sortBy === 'thc_mg') {
+    } else if (filters.sortBy === 'thc_mg') {
       base = base
         .filter((p) => MG_CATEGORIES.includes(p.category))
-        .sort((a, b) => sortOrder === 'desc' ? b.thc - a.thc : a.thc - b.thc)
+        .sort((a, b) => filters.sortOrder === 'desc' ? b.thc - a.thc : a.thc - b.thc)
     }
 
-    if (terpenePriority.length > 0) {
+    if (filters.terpenePriority.length > 0) {
       return [...base].sort((a, b) => {
-        for (const terpene of terpenePriority) {
+        for (const terpene of filters.terpenePriority) {
           const aVal = a.terpenes?.[terpene] ?? 0
           const bVal = b.terpenes?.[terpene] ?? 0
           if (bVal !== aVal) return bVal - aVal
@@ -269,9 +107,20 @@ function App() {
     return base
   })()
 
+  const totalPages = pageSize === 'All' ? 1 : Math.ceil(sortedProducts.length / pageSize)
+  const paginatedProducts =
+    pageSize === 'All'
+      ? sortedProducts
+      : sortedProducts.slice((currentPage - 1) * pageSize, currentPage * pageSize)
+
   const productsWithTerpenes = sortedProducts.filter(
     (p) => p.terpenes && Object.keys(p.terpenes).length > 0
   )
+
+  // Reset to page 1 when results change
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [sortedProducts.length, filters.sortBy, filters.sortOrder, filters.purchaseType])
 
   return (
     <div style={styles.app}>
@@ -281,65 +130,50 @@ function App() {
       </header>
 
       <div style={styles.container}>
-        <aside style={styles.sidebar}>
-          <button
-            style={{
-              ...styles.refreshButton,
-              ...(refreshing ? styles.refreshButtonDisabled : {}),
-            }}
-            onClick={refreshData}
-            disabled={refreshing}
-          >
-            {refreshing ? 'Refreshing...' : 'Refresh Data'}
-          </button>
-
-          <div style={styles.stats}>
-            <strong>Products:</strong> {sortedProducts.length}
-            <br />
-            <strong>With Terpenes:</strong> {productsWithTerpenes.length}
-          </div>
-
-          {error && <div style={styles.error}>{error}</div>}
-
-          <TerpeneSorter
-            sortBy={sortBy}
-            setSortBy={setSortBy}
-            sortOrder={sortOrder}
-            setSortOrder={setSortOrder}
-            availableTerpenes={availableTerpenes}
-            terpenePriority={terpenePriority}
-            onAddTerpenePriority={addTerpenePriority}
-            onRemoveTerpenePriority={removeTerpenePriority}
-            onMoveTerpenePriority={moveTerpenePriority}
-          />
-
-          <TerpeneFilter
-            availableTerpenes={availableTerpenes}
-            selectedTerpenes={selectedTerpenes}
-            onTerpeneChange={handleTerpeneChange}
-            categories={categories}
-            selectedCategory={selectedCategory}
-            onCategoryChange={setSelectedCategory}
-            strainTypes={strainTypes}
-            selectedStrainType={selectedStrainType}
-            onStrainTypeChange={setSelectedStrainType}
-            minThc={minThc}
-            maxThc={maxThc}
-            onMinThcChange={setMinThc}
-            onMaxThcChange={setMaxThc}
-            hideMissingTerpenes={hideMissingTerpenes}
-            onHideMissingTerpenesChange={setHideMissingTerpenes}
-            purchaseType={purchaseType}
-            onPurchaseTypeChange={setPurchaseType}
-            onClearFilters={clearFilters}
-          />
-        </aside>
+        <Sidebar
+          refreshing={refreshing}
+          onRefresh={refreshData}
+          error={error}
+          totalProducts={sortedProducts.length}
+          totalWithTerpenes={productsWithTerpenes.length}
+          sortBy={filters.sortBy} setSortBy={filters.setSortBy}
+          sortOrder={filters.sortOrder} setSortOrder={filters.setSortOrder}
+          availableTerpenes={availableTerpenes}
+          terpenePriority={filters.terpenePriority}
+          onAddTerpenePriority={filters.addTerpenePriority}
+          onRemoveTerpenePriority={filters.removeTerpenePriority}
+          onMoveTerpenePriority={filters.moveTerpenePriority}
+          selectedTerpenes={filters.selectedTerpenes}
+          onTerpeneChange={filters.handleTerpeneChange}
+          categories={categories}
+          selectedCategory={filters.selectedCategory}
+          onCategoryChange={filters.setSelectedCategory}
+          strainTypes={strainTypes}
+          selectedStrainType={filters.selectedStrainType}
+          onStrainTypeChange={filters.setSelectedStrainType}
+          minThc={filters.minThc} onMinThcChange={filters.setMinThc}
+          maxThc={filters.maxThc} onMaxThcChange={filters.setMaxThc}
+          hideMissingTerpenes={filters.hideMissingTerpenes}
+          onHideMissingTerpenesChange={filters.setHideMissingTerpenes}
+          purchaseType={filters.purchaseType}
+          onPurchaseTypeChange={filters.setPurchaseType}
+          onClearFilters={filters.clearFilters}
+        />
 
         <main style={styles.main}>
           {loading ? (
             <div style={styles.loading}>Loading products...</div>
           ) : (
-            <ProductList products={sortedProducts} />
+            <ProductList
+              products={paginatedProducts}
+              currentPage={currentPage}
+              totalPages={totalPages}
+              pageSize={pageSize}
+              pageSizes={PAGE_SIZES}
+              totalCount={sortedProducts.length}
+              onPageChange={setCurrentPage}
+              onPageSizeChange={(size) => { setPageSize(size); setCurrentPage(1) }}
+            />
           )}
         </main>
       </div>
