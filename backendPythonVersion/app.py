@@ -19,15 +19,15 @@ init_db()
 
 
 def _auto_refresh_loop():
-    """Background thread: scrape all products once per hour."""
+    """Background thread: scrape immediately on startup, then once per hour."""
     while True:
-        time.sleep(REFRESH_INTERVAL_SECONDS)
-        print("[auto-refresh] Starting scheduled product refresh...")
+        print("[auto-refresh] Starting product refresh...")
         try:
             products = scrape_all_products()
             print(f"[auto-refresh] Done — {len(products)} products updated.")
         except Exception as e:
             print(f"[auto-refresh] Error during refresh: {e}")
+        time.sleep(REFRESH_INTERVAL_SECONDS)
 
 
 _refresh_thread = threading.Thread(target=_auto_refresh_loop, daemon=True)

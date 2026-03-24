@@ -1,6 +1,10 @@
+using System;
 using backendCSharpVersion.Data;
 using backendCSharpVersion.Scraper;
 using backendCSharpVersion.Services;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.DependencyInjection;
 
 var builder = WebApplication.CreateBuilder(args);
 
