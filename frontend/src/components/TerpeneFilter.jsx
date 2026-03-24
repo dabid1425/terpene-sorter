@@ -73,6 +73,26 @@ const styles = {
     color: '#2e7d32',
     marginLeft: '5px',
   },
+  toggleGroup: {
+    display: 'flex',
+    borderRadius: '6px',
+    overflow: 'hidden',
+    border: '1px solid #ddd',
+  },
+  toggleBtn: {
+    flex: 1,
+    padding: '8px 0',
+    border: 'none',
+    cursor: 'pointer',
+    fontSize: '0.85rem',
+    backgroundColor: 'white',
+    color: '#333',
+    transition: 'background-color 0.15s',
+  },
+  toggleBtnActive: {
+    backgroundColor: '#2e7d32',
+    color: 'white',
+  },
 }
 
 function TerpeneFilter({
@@ -91,6 +111,8 @@ function TerpeneFilter({
   onMaxThcChange,
   hideMissingTerpenes,
   onHideMissingTerpenesChange,
+  purchaseType,
+  onPurchaseTypeChange,
   onClearFilters,
 }) {
   const hasActiveFilters =
@@ -99,10 +121,32 @@ function TerpeneFilter({
     selectedStrainType ||
     minThc ||
     maxThc ||
-    hideMissingTerpenes
+    hideMissingTerpenes ||
+    purchaseType
 
   return (
     <div>
+      {/* Purchase Type Toggle */}
+      <div style={styles.section}>
+        <h3 style={styles.sectionTitle}>Purchase Type</h3>
+        <div style={styles.toggleGroup}>
+          {['Recreational', 'Medical'].map((type, i) => (
+            <React.Fragment key={type}>
+              {i > 0 && <div style={{ width: '1px', backgroundColor: '#ddd' }} />}
+              <button
+                style={{
+                  ...styles.toggleBtn,
+                  ...(purchaseType === type ? styles.toggleBtnActive : {}),
+                }}
+                onClick={() => onPurchaseTypeChange(type)}
+              >
+                {type}
+              </button>
+            </React.Fragment>
+          ))}
+        </div>
+      </div>
+
       {/* Category Filter */}
       {categories.length > 0 && (
         <div style={styles.section}>

@@ -101,6 +101,7 @@ function App() {
   const [minThc, setMinThc] = useState('')
   const [maxThc, setMaxThc] = useState('')
   const [hideMissingTerpenes, setHideMissingTerpenes] = useState(false)
+  const [purchaseType, setPurchaseType] = useState('Recreational')
 
   // Sort state
   const [sortBy, setSortBy] = useState('total_terpenes')
@@ -129,6 +130,7 @@ function App() {
       if (selectedTerpenes.length > 0) params.append('terpenes', selectedTerpenes.join(','))
       if (minThc) params.append('min_thc', minThc)
       if (maxThc) params.append('max_thc', maxThc)
+      if (purchaseType === 'Recreational') params.append('purchase_type', 'Recreational')
 
       const response = await fetch(`${API_BASE}/products?${params}`)
       const data = await response.json()
@@ -140,7 +142,7 @@ function App() {
     } finally {
       setLoading(false)
     }
-  }, [sortBy, sortOrder, selectedCategory, selectedStrainType, selectedTerpenes, minThc, maxThc])
+  }, [sortBy, sortOrder, selectedCategory, selectedStrainType, selectedTerpenes, minThc, maxThc, purchaseType])
 
   const fetchMetadata = async () => {
     try {
@@ -223,6 +225,7 @@ function App() {
     setSortOrder('desc')
     setTerpenePriority([])
     setHideMissingTerpenes(false)
+    setPurchaseType('')
   }
 
   const sortedProducts = (() => {
@@ -316,6 +319,8 @@ function App() {
             onMaxThcChange={setMaxThc}
             hideMissingTerpenes={hideMissingTerpenes}
             onHideMissingTerpenesChange={setHideMissingTerpenes}
+            purchaseType={purchaseType}
+            onPurchaseTypeChange={setPurchaseType}
             onClearFilters={clearFilters}
           />
         </aside>
