@@ -72,7 +72,7 @@ builder.Services.AddHostedService<AutoRefreshService>();
 // ------------------------------------------------------------------
 // Listen on port 5002
 // ------------------------------------------------------------------
-builder.WebHost.UseUrls("http://0.0.0.0:5002");
+builder.WebHost.UseUrls("http://0.0.0.0:5001");
 
 var app = builder.Build();
 
