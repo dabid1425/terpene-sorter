@@ -128,6 +128,27 @@ public class Database
         Console.WriteLine($"Upserted {valid.Count} products into PostgreSQL ({products.Count - valid.Count} skipped)");
     }
 
+    public void DeleteStaleProducts(IEnumerable<int> currentVariantIds)
+    {
+        var ids = currentVariantIds.ToList();
+        if (ids.Count == 0)
+        {
+            Console.WriteLine("DeleteStaleProducts: empty id set, skipping to avoid wiping all products");
+            return;
+        }
+
+        using var conn = GetConnection();
+        conn.Open();
+        using var cmd = new NpgsqlCommand("DELETE FROM products WHERE variant_id != ALL(@ids)", conn);
+        cmd.Parameters.Add(new NpgsqlParameter("ids", NpgsqlDbType.Array | NpgsqlDbType.Integer)
+        {
+            Value = ids.ToArray()
+        });
+        var deleted = cmd.ExecuteNonQuery();
+        if (deleted > 0)
+            Console.WriteLine($"Removed {deleted} stale product(s) no longer in the API");
+    }
+
     public List<Product> LoadProducts(ProductFilters? filters = null)
     {
         var whereClauses = new List<string>();

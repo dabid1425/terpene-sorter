@@ -10,7 +10,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import requests
 
-from db import init_db, save_products as db_save_products, load_products as db_load_products
+from db import init_db, save_products as db_save_products, load_products as db_load_products, delete_stale_products
 
 BASE_URL = "https://shop.revcanna.com"
 LAB_API_URL = f"{BASE_URL}/_api/Products/GetExtendedLabdata"
@@ -214,6 +214,8 @@ def scrape_all_products():
                 print(f"  {completed}/{len(all_products)} variants enriched")
 
     save_products(all_products)
+    current_ids = {p['variant_id'] for p in all_products if p.get('variant_id')}
+    delete_stale_products(current_ids)
     return all_products
 
 

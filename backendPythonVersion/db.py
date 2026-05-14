@@ -114,6 +114,23 @@ def save_products(products):
     print(f"Upserted {len(valid)} products into PostgreSQL ({len(products) - len(valid)} skipped)")
 
 
+def delete_stale_products(current_variant_ids):
+    """Delete any products whose variant_id is not in current_variant_ids."""
+    if not current_variant_ids:
+        print("delete_stale_products: empty id set, skipping to avoid wiping all products")
+        return
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "DELETE FROM products WHERE variant_id != ALL(%s)",
+                (list(current_variant_ids),)
+            )
+            deleted = cur.rowcount
+        conn.commit()
+    if deleted:
+        print(f"Removed {deleted} stale product(s) no longer in the API")
+
+
 def load_products(filters=None):
     """Return products from the database as a list of plain dicts.
 

@@ -305,6 +305,7 @@ public class ProductScraper
         await EnrichWithLabData(allProducts);
 
         _db.SaveProducts(allProducts);
+        _db.DeleteStaleProducts(allProducts.Select(p => p.VariantId));
         return allProducts;
     }
 }
